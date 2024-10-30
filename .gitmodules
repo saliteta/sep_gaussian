@@ -9,4 +9,4 @@
 	url = https://gitlab.inria.fr/sibr/sibr_core.git
 [submodule "seperation_code"]
 	path = seperation_code
-	url = ./seperation_code/
+	url = https://github.com/saliteta/large_scale_seperation
