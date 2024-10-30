@@ -48,6 +48,7 @@ class ModelParams(ParamGroup):
     def __init__(self, parser, sentinel=False):
         self.sh_degree = 3
         self._source_path = ""
+        self._colmap_path = ""
         self._model_path = ""
         self._images = "images"
         self._resolution = -1
@@ -59,6 +60,7 @@ class ModelParams(ParamGroup):
     def extract(self, args):
         g = super().extract(args)
         g.source_path = os.path.abspath(g.source_path)
+        g.colmap_path = os.path.abspath(g.colmap_path)
         return g
 
 class PipelineParams(ParamGroup):

@@ -273,36 +273,63 @@ class GaussianModel:
     def _prune_optimizer(self, mask):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
-            stored_state = self.optimizer.state.get(group['params'][0], None)
+            old_param = group["params"][0]
+            stored_state = self.optimizer.state.pop(old_param, None)
             if stored_state is not None:
+                # Update the stored state with the mask
                 stored_state["exp_avg"] = stored_state["exp_avg"][mask]
                 stored_state["exp_avg_sq"] = stored_state["exp_avg_sq"][mask]
-
-                del self.optimizer.state[group['params'][0]]
-                group["params"][0] = nn.Parameter((group["params"][0][mask].requires_grad_(True)))
-                self.optimizer.state[group['params'][0]] = stored_state
-
-                optimizable_tensors[group["name"]] = group["params"][0]
+                
+                # Create new parameter with the masked data
+                new_param = nn.Parameter(old_param.data[mask].requires_grad_(True))
+                group["params"][0] = new_param
+                
+                # Update the optimizer state with the new parameter
+                self.optimizer.state[new_param] = stored_state
+                optimizable_tensors[group["name"]] = new_param
+                
+                # Explicitly delete old parameter
+                del old_param
             else:
-                group["params"][0] = nn.Parameter(group["params"][0][mask].requires_grad_(True))
-                optimizable_tensors[group["name"]] = group["params"][0]
+                # Handle the case where stored_state is None
+                new_param = nn.Parameter(old_param.data[mask].requires_grad_(True))
+                group["params"][0] = new_param
+                optimizable_tensors[group["name"]] = new_param
+                del old_param
         return optimizable_tensors
-
+    
     def prune_points(self, mask):
         valid_points_mask = ~mask
+        
+        # Prune optimizer parameters
         optimizable_tensors = self._prune_optimizer(valid_points_mask)
-
+        
+        # Store references to old attributes
+        old_xyz = self._xyz
+        old_features_dc = self._features_dc
+        old_features_rest = self._features_rest
+        old_opacity = self._opacity
+        old_scaling = self._scaling
+        old_rotation = self._rotation
+        
+        # Update attributes with pruned tensors
         self._xyz = optimizable_tensors["xyz"]
         self._features_dc = optimizable_tensors["f_dc"]
         self._features_rest = optimizable_tensors["f_rest"]
         self._opacity = optimizable_tensors["opacity"]
         self._scaling = optimizable_tensors["scaling"]
         self._rotation = optimizable_tensors["rotation"]
-
+        
+        # Explicitly delete old attributes
+        del old_xyz, old_features_dc, old_features_rest, old_opacity, old_scaling, old_rotation
+        
+        # Mask and delete other tensors
         self.xyz_gradient_accum = self.xyz_gradient_accum[valid_points_mask]
-
         self.denom = self.denom[valid_points_mask]
         self.max_radii2D = self.max_radii2D[valid_points_mask]
+        
+        # Clear CUDA cache
+        torch.cuda.empty_cache()
 
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
@@ -390,16 +417,16 @@ class GaussianModel:
         grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0.0
 
+        
         self.densify_and_clone(grads, max_grad, extent)
         self.densify_and_split(grads, max_grad, extent)
-
+        
         prune_mask = (self.get_opacity < min_opacity).squeeze()
         if max_screen_size:
             big_points_vs = self.max_radii2D > max_screen_size
             big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
             prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
         self.prune_points(prune_mask)
-
         torch.cuda.empty_cache()
 
     def add_densification_stats(self, viewspace_point_tensor, update_filter):

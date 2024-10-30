@@ -82,7 +82,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             pipe.debug = True
 
         bg = torch.rand((3), device="cuda") if opt.random_background else background
-
+        # Reset peak memory statistics before the operation
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
 
@@ -94,6 +94,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         iter_end.record()
 
+        torch.cuda.empty_cache()
         with torch.no_grad():
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
@@ -130,6 +131,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+                
+            torch.cuda.empty_cache()
 
 def prepare_output_and_logger(args):    
     if not args.model_path:
