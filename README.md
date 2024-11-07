@@ -41,3 +41,59 @@ base_port=6200
 ```
 
 We provide an example in run.sh. One can also use ./run.sh
+
+
+# Output and Examples
+
+## Output
+There are several output from one training and one evaluation
+Under the root folder of your output folder, we have 3 folder and one file
+```
+--root_output_folder
+  |--merged_filtered.ply #the point cloud that first filter and merged together, one used for rendering or downstream application
+  |--eval
+     |--report.csv # The PSNR, SSIM, and LPIPS result for the current scene
+     |--rendered_image1.png
+     |--rendered_image2.png
+     ...
+  |--models
+     |--training.log # Training log that will be updated during training 
+     |--confidence_heatmap.ply # This is the cofidence map for filtering and merge
+     |--point_cloud
+        |--iteration_7000
+        |--iteration_30000
+  |--seperation
+     |--summary.png # This is a summary of how the seperation is going
+     |--0 # This is a colmap folder
+        |--camera.bin
+        |--points3D.bin
+        |--images.bin
+        |--points3D.ply
+     |--1
+      ...
+```
+
+
+## Example
+- Seperation
+
+One can display the attention of each block on a 2D image, and we seperation method seperate along the edges
+<div style="display: flex; align-items: center;">
+  <img src="assets/four_partition.png" alt="Image 1" width="19.7%" style="margin-right: 10px;">
+  <img src="assets/more_partition.png" alt="Image 2" width="20%" style="margin-right: 10px;">
+  <img src="assets/camera_scatter.png" alt="Image 2" width="36.6%">
+</div>
+
+- Model
+For each block, we can simply load it to a web-based render app: https://github.com/antimatter15/splat, rendered result is displayed at the left handside 
+For loading the merged filtered result, we use the Adaptive Level of Detailed Rendering Engine, the result displayed in the right handside
+<div style="display: flex; align-items: center;">
+  <img src="assets/render_web.png" alt="Image 1" width="48%" style="margin-right: 10px;">
+  <img src="assets/render_large.png" alt="Image 2" width="43%" style="margin-right: 10px;">
+</div>
+
+- Attention/Confidence Map
+<div style="display: flex; align-items: center;">
+  <img src="assets/heatmap.jpg" alt="Image 1" width="45%" style="margin-right: 10px;">
+  <img src="assets/concatenation.png" alt="Image 2" width="45%">
+</div>
