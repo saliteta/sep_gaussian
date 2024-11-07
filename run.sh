@@ -13,53 +13,58 @@ base_port=6200
 cd seperation_code
 python segment.py --colmap_path ${colmap_path} --output ${separation_folder} --image_lower_bound 180 --image_upper_bound 220
 
-# cd ..
-# echo use the segmentation foler in the seperation folder ${separation_folder}
-# # 
-# # # Define the maximum number of concurrent processes during CPU-intensive phase
-# # 
-# subfolders=($(ls -d "${separation_folder}"*/))
-# # 
-# # # Starting port number
-# # 
-# for colmap_folders in "${subfolders[@]}"
-# do
-#     # Wait if the number of running processes equals the max concurrent processes
-#     while [ "$(jobs -rp | wc -l)" -ge "$max_concurrent_processes" ]; do
-#         sleep 30
-#     done
+cd ..
+echo use the segmentation foler in the seperation folder ${separation_folder}
 # 
-#     # Assign a GPU in a round-robin fashion
-#     gpu="${gpus[$((index % gpu_count))]}"
+# # Define the maximum number of concurrent processes during CPU-intensive phase
 # 
-#     # Get the next available port
-#     base_port=$(($base_port + 1))  # Update base_port to avoid reuse
+subfolders=($(ls -d "${separation_folder}"*/))
 # 
-#     basename_folder=$(basename "$colmap_folders")
-#     model_path=${model_folder}/${basename_folder}
-#     
-#     mkdir -p $model_path
+# # Starting port number
 # 
-#     # Build the command
-#     cmd="CUDA_VISIBLE_DEVICES=${gpu} python train.py -s \"${colmap_folders}\" --images ${image_path} -r 1 --data_device cpu --port ${base_port} -m ${model_path}"
+for colmap_folders in "${subfolders[@]}"
+do
+    # Wait if the number of running processes equals the max concurrent processes
+    while [ "$(jobs -rp | wc -l)" -ge "$max_concurrent_processes" ]; do
+        sleep 30
+    done
+
+    # Assign a GPU in a round-robin fashion
+    gpu="${gpus[$((index % gpu_count))]}"
+
+    # Get the next available port
+    base_port=$(($base_port + 1))  # Update base_port to avoid reuse
+
+    basename_folder=$(basename "$colmap_folders")
+    model_path=${model_folder}/${basename_folder}
+    
+    mkdir -p $model_path
+
+    # Build the command
+    cmd="CUDA_VISIBLE_DEVICES=${gpu} python train.py -s \"${colmap_folders}\" --images ${image_path} -r 1 --data_device cpu --port ${base_port} -m ${model_path}"
+
+    # Define the log file path
+    log_file="${model_path}/training.log"
+
+    # Start the training process in the background and redirect output to the log file
+    echo "Starting training on ${colmap_folders} using GPU ${gpu} and port ${base_port}"
+    nohup bash -c "$cmd" > "$log_file" 2>&1 &
+
+    index=$((index + 1))
+
+    # Sleep to stagger the CPU load
+    sleep 30
+done
+
+# Wait for all background processes to finish
+wait
 # 
-#     # Define the log file path
-#     log_file="${model_path}/training.log"
-# 
-#     # Start the training process in the background and redirect output to the log file
-#     echo "Starting training on ${colmap_folders} using GPU ${gpu} and port ${base_port}"
-#     nohup bash -c "$cmd" > "$log_file" 2>&1 &
-# 
-#     index=$((index + 1))
-# 
-#     # Sleep to stagger the CPU load
-#     sleep 30
-# done
-# 
-# # Wait for all background processes to finish
-# wait
-# # 
-#  #### After training, we need to the following
-#  
-# cd seperation_code/
-# python filtering.py --colmap_folder ${separation_folder} --model_folder ${model_folder} --output_folder ${output}
+ #### After training, we need to the following
+ 
+cd seperation_code/
+python filtering.py --colmap_folder ${separation_folder} --model_folder ${model_folder} --output_folder ${output}
+
+
+#### To evaluate the raw output PSNR, SSIM, and LPIPS, use following evaluation code
+export CUDA_VISIBLE_DEVICES="${gpus[0]}"
+python metrics.py --model_location ${output} --images ${image_path} 
